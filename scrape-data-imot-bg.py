@@ -50,14 +50,14 @@ def fetch_webpage(url):
     return real_estate_dict
 
 # URL of the webpage you want to scrape
-base_url = 'https://www.imoti.net/bg/obiavi/r/prodava/sofia?page='  # Replace with the actual URL
+base_url = 'https://www.imoti.net/bg/obiavi/r/prodava/sofia/?page=1&sid=gSoWpd'  # Replace with the actual URL
 
-total_pages = 50
+total_pages = 357
 
 real_estate_data = {} # here we are going to store the books information from each page
 
 for page_number in range(1, total_pages + 1):
-    the_url = base_url + str(page_number)
+    the_url = f'https://www.imoti.net/bg/obiavi/r/prodava/sofia/?page={page_number}&sid=gSoWpd'# + str(page_number)
     current_page_real_estate_data = fetch_webpage(the_url)
     real_estate_data.update(current_page_real_estate_data)
     print(real_estate_data)
