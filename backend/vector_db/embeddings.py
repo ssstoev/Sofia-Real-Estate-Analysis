@@ -21,7 +21,7 @@ QDRANT_API_KEY = os.getenv("QDRANT_API_KEY")
 QDRANT_CLUSTER_URL = os.getenv("QDRANT_CLUSTER_URL")
 
 def build_text_for_embedding(listing: dict) -> str:
-    '''Combine all of the fields into one string'''
+    '''Combine all of the fields into one string''' 
     return (
         f"Hash_id: {listing['hash_id']}",
         f"Title: {listing['title']}. ",

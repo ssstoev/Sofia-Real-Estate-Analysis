@@ -80,7 +80,7 @@ async def search(request: SearchRequest):
                 print(e)
 
         print("final results are fetched")
-        print(final_results[0])
+        # print(final_results[0])
         # Step 6: Shape into response
         listings = [
             Listing(

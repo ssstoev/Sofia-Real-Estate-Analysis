@@ -31,8 +31,8 @@ def search_vector_db(query: str, hash_ids: list = None, top_k: int = 100):
     return results.points
 
 # Example
-results = search_vector_db("Необзаведен апартамент в квартал Надежда", top_k=5) #, ["93e00b28728005ffbece0fb975f1d38678910fb796a7fd28b40fc97826e2e124", 
-                                                                        #'f86956dd334888697e09f28acb103cf8c9dfa00f0bc5d6bec99a5fae51bc5751'])
-for r in results:
-    print(r.payload["Title"])
+# results = search_vector_db("Необзаведен апартамент в квартал Надежда", top_k=5) #, ["93e00b28728005ffbece0fb975f1d38678910fb796a7fd28b40fc97826e2e124", 
+#                                                                         #'f86956dd334888697e09f28acb103cf8c9dfa00f0bc5d6bec99a5fae51bc5751'])
+# for r in results:
+#     print(r.payload["Title"])
 # print(results)
