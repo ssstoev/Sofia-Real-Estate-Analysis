@@ -16,6 +16,11 @@ export interface SearchResponse {
     total: number;
 }
 
+export interface ChatResponse {
+    response: string;
+    listings: Listing[];
+}
+
 export async function searchListings(query: string, topK: number = 10): Promise<SearchResponse> {
     console.log("Calling API...")
     const response = await fetch(`${API_BASE}/search`, {
@@ -25,6 +30,18 @@ export async function searchListings(query: string, topK: number = 10): Promise<
     });
 
     if (!response.ok) throw new Error("Search failed");
+
+    return response.json();
+}
+
+export async function sendChatMessage(message: string, sessionId: string): Promise<ChatResponse> {
+    const response = await fetch(`${API_BASE}/chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message, session_id: sessionId })
+    });
+
+    if (!response.ok) throw new Error("Chat request failed");
 
     return response.json();
 }

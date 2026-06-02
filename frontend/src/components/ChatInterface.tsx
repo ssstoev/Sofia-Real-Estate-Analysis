@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { Send, Sparkles, Building2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import ListingCard from "./ListingCard";
-import { Listing, searchListings } from "@/api/api";
+import { Listing, sendChatMessage } from "@/api/api";
 
 interface Message {
   id: string;
@@ -35,6 +35,7 @@ const ChatInterface = () => {
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const sessionId = useRef<string>(crypto.randomUUID());
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -55,14 +56,14 @@ const ChatInterface = () => {
     setInput("");
     setIsLoading(true);
 
-    // Call the real search API
+    // Call the chat API
     try {
-      const data = await searchListings(messageText);
+      const data = await sendChatMessage(messageText, sessionId.current);
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: "assistant",
-        content: `I found ** ${data.total} listings** matching your query. Here are the best matches sorted by relevance:`,
-        listings: data.results,
+        content: data.response,
+        listings: data.listings?.length > 0 ? data.listings : undefined,
       };
       setMessages((prev) => [...prev, assistantMessage]);
     } catch (err) {

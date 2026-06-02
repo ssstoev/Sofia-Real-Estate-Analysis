@@ -1,23 +1,13 @@
 from data_transformation.src.database import fetch_metadata_from_rdbms
-from fastapi import FastAPI, HTTPException
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import Optional
 import traceback
 
 from retrieval.hard_constraints import extract_hard_constraints, filter_db_on_hard_constraints
 from vector_db.search_embeddings import search_vector_db
-from fastapi.middleware.cors import CORSMiddleware
 
-app = FastAPI()
-
-# Without this your browser will throw a CORS error before the request even reaches your backend.
-# Need to add it because fasAPI & Vite are on different ports
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["http://localhost:8080"],  # Vite's default port
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+router = APIRouter()
 # --- Request / Response Models ---
 # create pydantic model for the search request; for a single listing  & for a list of listings
 class SearchRequest(BaseModel):
@@ -39,7 +29,7 @@ class SearchResponse(BaseModel):
     total: int
 
 # --- POST Endpoint ---
-@app.post("/search", response_model=SearchResponse)
+@router.post("/search", response_model=SearchResponse)
 async def search(request: SearchRequest):
     try:
         # Step 1: Extract hard constraints from the query
