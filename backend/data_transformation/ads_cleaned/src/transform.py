@@ -45,6 +45,7 @@ def transform_data(df: pd.DataFrame):
 
 
 def extract_floor_number(floor_string: str):
+    '''Extract the floor number from a string'''
     if pd.isna(floor_string):
         return np.nan
 

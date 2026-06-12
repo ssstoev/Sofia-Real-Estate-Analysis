@@ -2,7 +2,7 @@
 import json
 
 from psycopg2.extras import RealDictCursor
-from data_transformation.src.database import get_connection
+from backend.data_transformation.ads_cleaned.src.database import get_connection
 
 async def get_stats(metric: str, filters: dict = None):
     if isinstance(filters, str):

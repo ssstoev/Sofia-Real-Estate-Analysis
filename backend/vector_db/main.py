@@ -7,7 +7,7 @@ import sqlite3
 
 import qdrant_client
 
-from data_transformation.src.database import query_entire_database_table
+from backend.data_transformation.ads_cleaned.src.database import query_entire_database_table
 from vector_db.embeddings import embed_ads_data
 
 def main():

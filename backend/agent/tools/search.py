@@ -1,7 +1,7 @@
 # tools/search.py
 from retrieval.hard_constraints import extract_hard_constraints, filter_db_on_hard_constraints
 from vector_db.search_embeddings import search_vector_db
-from data_transformation.src.database import fetch_metadata_from_rdbms
+from backend.data_transformation.ads_cleaned.src.database import fetch_metadata_from_rdbms
 
 async def search_listings(query: str, top_k: int = 5) -> list[dict]:
     constraints = extract_hard_constraints(query)

@@ -9,7 +9,7 @@ from psycopg2 import sql
 from psycopg2.extras import execute_values
 
 
-BACKEND_DIR = Path(__file__).resolve().parents[2]
+BACKEND_DIR = Path(__file__).resolve().parents[3]
 load_dotenv(BACKEND_DIR / ".env")
 DATABASE_URL = os.getenv("DATABASE_URL")
 

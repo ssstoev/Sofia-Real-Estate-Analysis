@@ -10,7 +10,7 @@ import uuid
 import qdrant_client
 import sqlite3
 
-from data_transformation.src.database import query_entire_database_table
+from backend.data_transformation.ads_cleaned.src.database import query_entire_database_table
 
 from dotenv import load_dotenv
 load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))

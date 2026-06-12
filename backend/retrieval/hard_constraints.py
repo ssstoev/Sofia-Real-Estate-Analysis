@@ -1,6 +1,6 @@
 import re
 
-from data_transformation.src.database import get_connection
+from backend.data_transformation.ads_cleaned.src.database import get_connection
 
 PROPERTY_TYPE_ROOMS = {
     'гарсониера': 1,
