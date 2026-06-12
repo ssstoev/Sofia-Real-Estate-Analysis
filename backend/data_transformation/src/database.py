@@ -1,30 +1,41 @@
-import sqlite3
-import os 
+import os
+from pathlib import Path
 
-def init_ads_cleaned_db(db_path='scraper/data/ads_storage.db'):
-    conn = sqlite3.connect(db_path, timeout=10)
-    conn.isolation_level = None  # Autocommit mode to avoid locks 
-    try:
-        conn.execute("PRAGMA journal_mode=WAL")  # Enable WAL for concurrent access
-    except sqlite3.OperationalError:
-        pass  # WAL already set or can't be set, continue anyway
-    conn.isolation_level = ""  # Reset to default
+import numpy as np
+import pandas as pd
+import psycopg2
+from dotenv import load_dotenv
+from psycopg2 import sql
+from psycopg2.extras import execute_values
+
+
+BACKEND_DIR = Path(__file__).resolve().parents[2]
+load_dotenv(BACKEND_DIR / ".env")
+DATABASE_URL = os.getenv("DATABASE_URL")
+
+
+def get_connection():
+    if not DATABASE_URL:
+        raise RuntimeError("DATABASE_URL is not set. Add it to backend/.env.")
+
+    return psycopg2.connect(DATABASE_URL)
+
+
+def init_ads_cleaned_db(conn):
     cursor = conn.cursor()
-    
-    # Drop and recreate to ensure schema is always up to date
-    # cursor.execute("DROP TABLE IF EXISTS ads_cleaned")
+    cursor.execute("SET search_path TO public")
     cursor.execute("""
-        CREATE TABLE IF NOT EXISTS ads_cleaned (
+        CREATE TABLE IF NOT EXISTS public.ads_cleaned (
             hash_id VARCHAR(64) PRIMARY KEY,
             title VARCHAR(500),
-            imgUrl VARCHAR(1000),
+            img_url VARCHAR(1000),
             link VARCHAR(1000),
             neighbourhood VARCHAR(255),
             type_of_estate VARCHAR(100),
             total_price_eur DECIMAL(10, 2),
-            price_m2_eur DECIMAL(10,2),
-            price_m2_bgn DECIMAL(10,2),
-            size_m2 DECIMAL(10,2),
+            price_m2_eur DECIMAL(10, 2),
+            price_m2_bgn DECIMAL(10, 2),
+            size_m2 DECIMAL(10, 2),
             nr_of_rooms SMALLINT,
             description TEXT,
             floor SMALLINT,
@@ -36,130 +47,118 @@ def init_ads_cleaned_db(db_path='scraper/data/ads_storage.db'):
             extras VARCHAR(500)
         )
     """)
+    cursor.execute("TRUNCATE TABLE public.ads_cleaned")
     conn.commit()
-    conn.close()
-    print("Created ads_cleaned table!")
+    print("Prepared ads_cleaned table!")
+
 
 def load_data_into_ads_cleaned(cleaned_dict, conn):
-    # cleaned_dict = df.to_dict()
-    # cleaned_data should be in format {"hash_id", "title", etc.}
     print("Loading data into ads_cleaned...\n")
+    rows = [
+        (
+            clean_value(item.get("hash_id")),
+            clean_value(item.get("title")),
+            clean_value(item.get("img_url")),
+            clean_value(item.get("link")),
+            clean_value(item.get("neighbourhood")),
+            clean_value(item.get("type_of_estate")),
+            clean_value(item.get("total_price_eur")),
+            clean_value(item.get("price_m2_eur")),
+            clean_value(item.get("price_m2_bgn")),
+            clean_value(item.get("size_m2")),
+            clean_value(item.get("nr_of_rooms")),
+            clean_value(item.get("description")),
+            clean_value(item.get("floor")),
+            clean_value(item.get("akt16")),
+            clean_value(item.get("energy_class")),
+            clean_value(item.get("potreblenie")),
+            clean_value(item.get("broker_commision")),
+            clean_value(item.get("additional_notes")),
+            clean_value(item.get("extras")),
+        )
+        for item in cleaned_dict
+    ]
+
+    if not rows:
+        print("No rows to load into ads_cleaned.\n")
+        return
+
+    query = """
+        INSERT INTO public.ads_cleaned (
+            hash_id,
+            title,
+            img_url,
+            link,
+            neighbourhood,
+            type_of_estate,
+            total_price_eur,
+            price_m2_eur,
+            price_m2_bgn,
+            size_m2,
+            nr_of_rooms,
+            description,
+            floor,
+            akt16,
+            energy_class,
+            potreblenie,
+            broker_commision,
+            additional_notes,
+            extras
+        ) VALUES %s
+    """
+
     cursor = conn.cursor()
-    for item in cleaned_dict:
-        print(f"updating item: {item["hash_id"]}")
-        query = """
-            INSERT OR IGNORE INTO ads_cleaned (
-                hash_id,
-                title,
-                imgUrl,
-                link,               
-                neighbourhood,
-                type_of_estate,
-                total_price_eur,
-                price_m2_eur,
-                price_m2_bgn,
-                size_m2,
-                nr_of_rooms,
-                description,
-                floor,
-                akt16,
-                energy_class,
-                potreblenie,
-                broker_commision,
-                additional_notes,
-                extras
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """
-        
-        # 2. Execute
-        cursor.execute(query, (
-            item["hash_id"],
-            item["title"],
-            item["imgUrl"],
-            item["link"],               
-            item["neighbourhood"],
-            item["type_of_estate"],
-            item["total_price_eur"],
-            item["price_m2_eur"],
-            item["price_m2_bgn"],
-            item["size_m2"],
-            item["nr_of_rooms"],
-            item["description"],
-            item["floor"],
-            item["akt16"],
-            item["energy_class"],
-            item["potreblenie"],
-            item["broker_commision"],
-            item["additional_notes"],
-            item["extras"]
-        ))
+    execute_values(cursor, query, rows, page_size=1000)
     conn.commit()
     print("Finished loading data into ads_cleaned!\n")
 
-    return None
 
-def query_entire_database_table(table_name: str, conn: sqlite3.Connection) -> list[dict]:
+def query_entire_database_table(table_name: str, conn) -> list[dict]:
     cursor = conn.cursor()
-    query = f'''
-            SELECT *
-            FROM {table_name}
-            '''
-    
-    cursor.execute(query)
+    cursor.execute(sql.SQL("SELECT * FROM {}").format(sql.Identifier(table_name)))
     columns = [desc[0] for desc in cursor.description]
     rows = cursor.fetchall()
 
     return [dict(zip(columns, row)) for row in rows]
 
-def rename_table(old_name: str, new_name: str, conn: sqlite3.Connection) -> None:
-    cursor = conn.cursor()
-    cursor.execute(f"ALTER TABLE {old_name} RENAME TO {new_name}")
-    conn.commit()
-
-# def add_price_column(conn):
-#     '''Create and populate a total price column in ads_clean.
-#      The column is derived from the size_m2 * price_m2_eur'''
-#     cursor = conn.cursor()
-    
-#     # query_create_column = '''
-#     # ALTER TABLE ads_cleaned
-#     # ADD COLUMN total_price_eur DECIMAL(10, 2);
-#     # '''
-#     # cursor.execute(query_create_column)
-    
-#     query_populate_column = '''
-#     UPDATE ads_cleaned
-#     SET total_price_eur = COALESCE(price_m2_eur, 0) * COALESCE(size_m2, 0)
-#     '''
-
-#     cursor.execute(query_populate_column)
-#     conn.commit()
 
 def fetch_metadata_from_rdbms(candidate_ids: list):
-    '''Fetch the link & image URL from the RDBMS'''
-    # Connect to RDBMS
-    print("trying to connect")
-    _DB_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "scraper", "data", "ads_storage.db")
-    conn = sqlite3.connect(_DB_PATH)
+    if not candidate_ids:
+        return {}
+
+    conn = get_connection()
     cursor = conn.cursor()
-    print("conncted to db!")
-    placeholders = ",".join(["?"] * len(candidate_ids))
-
-    query = f"""
-        SELECT hash_id, link, imgUrl
+    cursor.execute(
+        """
+        SELECT hash_id, link, img_url
         FROM ads_cleaned
-        WHERE hash_id IN ({placeholders})
-    """
-
-    cursor.execute(query, candidate_ids)
+        WHERE hash_id = ANY(%s)
+        """,
+        (candidate_ids,),
+    )
     rows = cursor.fetchall()
-    print("query executed")
-    sql_data = {
+    conn.close()
+
+    return {
         row[0]: {
             "link": row[1],
-            "imgUrl": row[2]
+            "img_url": row[2],
         }
         for row in rows
     }
-    print("converted to dict")
-    return sql_data
+
+
+def clean_value(value):
+    if value is pd.NA or value is None:
+        return None
+
+    if isinstance(value, (np.generic,)):
+        value = value.item()
+
+    if pd.isna(value):
+        return None
+
+    if isinstance(value, float) and not np.isfinite(value):
+        return None
+
+    return value

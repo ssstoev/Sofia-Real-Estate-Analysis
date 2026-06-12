@@ -1,42 +1,43 @@
-import sqlite3
+import psycopg2
 import requests
 from bs4 import BeautifulSoup
 import time
 import os
+from dotenv import load_dotenv
 
-_DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'data', 'ads_storage.db')
+load_dotenv()
 
-from scraper.src.database import add_missing_col_information, fetch_missing_rows, fetch_pending_ads, update_records
+DATABASE_URL = os.getenv("DATABASE_URL")
+from scraper.src.database import fetch_pending_ads, update_records
 
 def normalize_fields(scraped_data):
     """Map Bulgarian HTML field names to database column names"""
     mapping = {
-        'Цена на м2/EUR/:': 'price_m2_eur',
-        'Цена на м2/BGN/:': 'price_m2_bgn',
-        'Квадратура /м2/:': 'size_m2',
-        'Етаж :': 'floor',
-        'Акт 16:': 'akt16',
-        'Енергиен клас:': 'energy_class',
-        'Потребление:': 'potreblenie',
-        'Дължи се комисион на брокера': 'broker_commision',
-        'Бележки': 'additional_notes',
+        '???? ?? ?2/EUR/:': 'price_m2_eur',
+        '???? ?? ?2/BGN/:': 'price_m2_bgn',
+        '?????????? /?2/:': 'size_m2',
+        '???? :': 'floor',
+        '??? 16:': 'akt16',
+        '???????? ????:': 'energy_class',
+        '???????????:': 'potreblenie',
+        '????? ?? ???????? ?? ???????': 'broker_commision',
+        '???????': 'additional_notes',
+        '???? EUR/:': 'total_price_eur',
     }
-    
+
     normalized = {}
     for bg_key, value in scraped_data.items():
         if bg_key in mapping:
             normalized[mapping[bg_key]] = value
         else:
-            normalized[bg_key] = value  # Keep unmapped fields
-    
+            normalized[bg_key] = value
+
     return normalized
 
 def run_worker(batch_size=20):
     while True:
         # 1. Connect to DB for reading
-        conn = sqlite3.connect(_DB_PATH)
-        conn.execute("PRAGMA busy_timeout = 10000")  # 10 second timeout
-
+        conn = psycopg2.connect(DATABASE_URL)
         cursor = conn.cursor()
         pending_ads = fetch_pending_ads(conn, batch_size=batch_size)
         cursor.close()
@@ -50,6 +51,7 @@ def run_worker(batch_size=20):
         for ad_item in pending_ads:
             print(10*"=" + f"Fetching the html for item {ad_item["hash_id"]}..." + 10*"=")
             item_response = requests.get(ad_item['link'])
+            item_response.encoding = item_response.apparent_encoding
             item_soup = BeautifulSoup(item_response.text, "html.parser")
             
             # grab the sidebar with descrtiptions (single element)
@@ -71,6 +73,16 @@ def run_worker(batch_size=20):
                 description_text = description.get_text(" ", strip=True) if description else ""
                 ad_item["description"] = description_text
                 # print(description_text)
+
+                price_container = item_soup.find("div", class_="big-price")
+                price_tag = price_container.find("strong") if price_container else None
+                if price_tag:
+                    ad_item["total_price_eur"] = (
+                        price_tag.get_text(" ", strip=True)
+                        .replace("€", "")
+                        .replace("EUR", "")
+                        .strip()
+                    )
                 
                 for row in table_with_td_info.find_all("tr") if table_with_td_info else []:
                     cols = row.find_all("td")
@@ -91,7 +103,17 @@ def run_worker(batch_size=20):
 
                 # print(10*"=" + f"Finished with item {id}" + 10*"=")
                 ad_item = normalize_fields(ad_item)  # Convert field names
-                # WIP: Scrape the total price (add DB col before that)
+
+                # Scrape img_url
+                img_tag = item_soup.find("img", {"itemprop": "image"})
+                src = img_tag.get("src") if img_tag else None
+                ad_item["img_url"] = "https://www.imoti.net" + src if src else None
+
+                # Scrape extras
+                extras_ul = item_soup.find("ul", class_="extras")
+                li_items = extras_ul.find_all("li") if extras_ul else []
+                ad_item["extras"] = "; ".join([li.get_text(strip=True) for li in li_items]) if li_items else None
+
                 update = {
                     "hash_id": ad_item["hash_id"],
                     "description": ad_item.get("description", ""),
@@ -104,6 +126,9 @@ def run_worker(batch_size=20):
                     "potreblenie": ad_item.get("potreblenie", ""),
                     "broker_commision": ad_item.get("broker_commision", ""),
                     "additional_notes": ad_item.get("additional_notes", ""),
+                    "img_url": ad_item.get("img_url"),
+                    "extras": ad_item.get("extras"),
+                    "total_price_eur": ad_item.get("total_price_eur", ""),
                 }
                 updates.append(update)
             except Exception as e:
@@ -113,119 +138,11 @@ def run_worker(batch_size=20):
 
         # Batch update all records once - open NEW connection for writing
         if updates:
-            time.sleep(0.5)  # Increase delay to ensure lock is released
-            write_conn = sqlite3.connect(_DB_PATH, timeout=30)
-            write_conn.execute("PRAGMA busy_timeout = 30000")
+            write_conn = psycopg2.connect(DATABASE_URL)
             update_records(write_conn, updates)
             write_conn.close()
         
         print(f"updated new batch of {batch_size} records")
-    return None
-
-def backfill_new_column(batch_size=20):
-    total_updated_count = 0
-    while True:
-        # 1. Connect to DB for reading
-        conn = sqlite3.connect(_DB_PATH)
-        conn.execute("PRAGMA busy_timeout = 10000")  # 10 second timeout
-        
-        # get the urls of the empty values
-        print("fetching the batch... ")
-        extras_list = fetch_missing_rows(conn, "extras")
-        print(f"fetched the hash_ids of the missing cols: {len(extras_list)}")
-        conn.close()
-
-        # if there're no left missing extras
-        if len(extras_list) == 0:
-            break
-
-        # for each item in the extras_list scrape the data and add it to the db
-        try:
-            updates = []
-            for item in extras_list:
-                print(f"Scraping info for item {item["hash_id"]}..")
-                response = requests.get(item["link"])
-                print(f"Scraped the info for item {item["hash_id"]}")
-
-                soup = BeautifulSoup(response.content, "html.parser")
-                result = soup.find("ul", class_="extras")
-                li_items = result.find_all('li') if result else []
-
-                update_dict = {
-                    "hash_id": item["hash_id"],
-                    "extras": "; ".join([li.get_text(strip=True) for li in li_items]) if li_items else "EMPTY"
-                    }
-                
-                updates.append(update_dict)
-            print("scraping of batch finished")
-        except Exception as e:
-            print(e)
-
-        if updates:
-            # time.sleep(0.5)  # Increase delay to ensure lock is released
-            write_conn = sqlite3.connect(_DB_PATH, timeout=30)
-            write_conn.execute("PRAGMA busy_timeout = 30000")
-            print("updating the DB with new info...")
-            add_missing_col_information(write_conn, "extras", updates, "extras")
-            write_conn.close()
-        
-        total_updated_count += batch_size
-        print(f"updated a total of {total_updated_count} records")
-
-    return None
-
-def backfill_imgurl_column(batch_size=20):
-    total_updated_count = 0
-    while True:
-        # 1. Connect to DB for reading
-        conn = sqlite3.connect(_DB_PATH)
-        conn.execute("PRAGMA busy_timeout = 10000")  # 10 second timeout
-        
-        # get the urls of the empty values
-        # print("fetching the batch... ")
-        result_list = fetch_missing_rows(conn, "imgUrl")
-        # print(f"fetched the hash_ids of the missing cols: {len(result_list)}")
-        print(result_list)
-        conn.close()
-
-        # if there're no left missing extras
-        if len(result_list) == 0:
-            break
-
-        # for each item in the result_list scrape the data and add it to the db
-        updates = []
-        for item in result_list:
-            try:
-                print(f"Scraping info for item {item['link']}..")
-                response = requests.get(item["link"])
-                print(f"Scraped the info for item {item['link']}")
-
-                soup = BeautifulSoup(response.content, "html.parser")
-                result = soup.find("img", {"itemprop": "image"})
-                src = result.get("src") if result else None
-                print("src:", src)
-                update_dict = {
-                    "hash_id": item["hash_id"],
-                    "imgUrl": "https://www.imoti.net" + src if src else "EMPTY"
-                    }
-                updates.append(update_dict)
-            except Exception as e:
-                print(f"error scraping {item.get('hash_id')}: {e}")
-                # still mark as EMPTY so it won't be re-fetched endlessly
-                updates.append({"hash_id": item["hash_id"], "imgUrl": "EMPTY"})
-        print("scraping of batch finished")
-
-        if updates:
-            # time.sleep(0.5)  # Increase delay to ensure lock is released
-            write_conn = sqlite3.connect(_DB_PATH, timeout=30)
-            write_conn.execute("PRAGMA busy_timeout = 30000")
-            print("updating the DB with new info...")
-            add_missing_col_information(write_conn, "imgUrl", updates, "imgUrl")
-            write_conn.close()
-        
-        total_updated_count += len(updates)
-        print(f"updated a total of {total_updated_count} records")
-
     return None
 
 

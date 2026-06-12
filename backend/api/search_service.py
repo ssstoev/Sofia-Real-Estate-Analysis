@@ -18,7 +18,7 @@ class Listing(BaseModel):
     hash_id: str
     title: Optional[str] = None
     link: Optional[str] = None
-    imgUrl: Optional[str] = None
+    img_url: Optional[str] = None
     total_price_eur: Optional[float] = None
     size_m2: Optional[str] = None
     neighbourhood: Optional[str] = None
@@ -77,7 +77,7 @@ async def search(request: SearchRequest):
                 hash_id = r.get("hash_id", ""),
                 title = r.get("Title", ""),
                 link = r.get("link", ""),
-                imgUrl = r.get("imgUrl", ""),
+                img_url = r.get("img_url", ""),
                 total_price_eur = r.get("Price (EUR)") or None,
                 size_m2 = r.get("Size", ""),
                 neighbourhood = r.get("Neighbourhood", ""),

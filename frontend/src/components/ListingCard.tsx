@@ -16,7 +16,7 @@ const ListingCard = ({ listing }: ListingCardProps) => {
     <div className="group flex gap-4 rounded-xl border border-border bg-card p-3 transition-shadow hover:shadow-md">
       <div className="relative h-28 w-40 flex-shrink-0 overflow-hidden rounded-lg">
         <img
-          src={listing.imgUrl}
+          src={listing.img_url}
           // alt={listing.title}
           className="h-full w-full object-cover transition-transform group-hover:scale-105"
         />

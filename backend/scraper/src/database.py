@@ -1,17 +1,15 @@
-import sqlite3
+import psycopg2
 import datetime as dt
 import os
+from dotenv import load_dotenv
 
-_DEFAULT_DB_PATH = os.path.join(os.path.dirname(__file__), '..', 'data', 'ads_storage.db')
+load_dotenv()
 
-def init_db(db_path=_DEFAULT_DB_PATH):
-    conn = sqlite3.connect(db_path, timeout=10)
-    conn.isolation_level = None  # Autocommit mode to avoid locks
-    try:
-        conn.execute("PRAGMA journal_mode=WAL")  # Enable WAL for concurrent access
-    except sqlite3.OperationalError:
-        pass  # WAL already set or can't be set, continue anyway
-    conn.isolation_level = ""  # Reset to default
+# _DEFAULT_DB_PATH = os.path.join(os.path.dirname(__file__), '..', 'data', 'ads_storage.db')
+DATABASE_URL = os.getenv("DATABASE_URL")
+
+def init_db():
+    conn = psycopg2.connect(DATABASE_URL)
     cursor = conn.cursor()
     
     # Create the table if it doesn't exist
@@ -20,6 +18,8 @@ def init_db(db_path=_DEFAULT_DB_PATH):
             hash_id TEXT PRIMARY KEY,
             title TEXT,
             link TEXT,
+            img_url TEXT,
+            total_price_eur TEXT,
             price_m2_eur TEXT,
             price_m2_bgn TEXT,
             size_m2 TEXT,
@@ -31,8 +31,9 @@ def init_db(db_path=_DEFAULT_DB_PATH):
             broker_commision TEXT,
             additional_notes TEXT,
             status TEXT DEFAULT 'pending',
-            created_at DATETIME,
-            last_updated DATETIME
+            extras TEXT,
+            scraped_at TIMESTAMP,
+            last_updated TIMESTAMP
         )
     """)
     conn.commit()
@@ -44,9 +45,10 @@ def insert_ad(cursor, ad_data):
         # 1. Prepare the Query
         time = dt.datetime.now()
         query = """
-            INSERT OR IGNORE INTO ads_raw (
-                hash_id, title, link, status, created_at, last_updated
-            ) VALUES (?, ?, ?, 'pending', ?, ?)
+            INSERT INTO ads_raw (
+                hash_id, title, link, status, scraped_at, last_updated
+            ) VALUES (%s, %s, %s, 'pending', %s, %s)
+            ON CONFLICT (hash_id) DO NOTHING
         """
         
         # 2. Execute
@@ -62,9 +64,8 @@ def insert_ad(cursor, ad_data):
 
 def fetch_pending_ads(conn, batch_size=100):
     cursor = conn.cursor()
-    cursor.execute("BEGIN IMMEDIATE")
     query = '''
-    SELECT * FROM ads_raw WHERE status IN ("pending", "processing") LIMIT ?
+    SELECT * FROM ads_raw WHERE status IN ('pending', 'processing') LIMIT %s
     '''
     cursor.execute(query, (batch_size,))
 
@@ -78,7 +79,7 @@ def fetch_pending_ads(conn, batch_size=100):
     cursor.executemany("""
         UPDATE ads_raw
         SET status = 'processing'
-        WHERE hash_id = ?
+        WHERE hash_id = %s
     """, [(ad["hash_id"],) for ad in pending_list])
 
     conn.commit()
@@ -90,15 +91,17 @@ def update_records(conn, updates):
     for update in updates:
         cursor.execute("""
             UPDATE ads_raw 
-            SET description = ?, price_m2_eur = ?, price_m2_bgn = ?,
-                       size_m2 = ?, floor = ?, akt16 = ?, energy_class = ?,
-                       potreblenie = ?, broker_commision = ?, additional_notes = ?,
-                       status = 'done', last_updated = ?
-            WHERE hash_id = ?
+            SET description = %s, price_m2_eur = %s, price_m2_bgn = %s,
+                       size_m2 = %s, floor = %s, akt16 = %s, energy_class = %s,
+                       potreblenie = %s, broker_commision = %s, additional_notes = %s,
+                       img_url = %s, extras = %s, total_price_eur = %s,
+                       status = 'done', last_updated = %s
+            WHERE hash_id = %s
         """, 
             (update["description"], update["price_m2_eur"], update["price_m2_bgn"],
               update["size_m2"], update["floor"], update["akt16"], update["energy_class"],
                update["potreblenie"], update["broker_commision"], update["additional_notes"],
+               update["img_url"], update["extras"], update["total_price_eur"],
                dt.datetime.now(), update["hash_id"])
         )
     conn.commit()
@@ -106,9 +109,9 @@ def update_records(conn, updates):
 
 # We missed extracting data for 1 column so we will backfill it without scraping everything again from scratch
 
-def create_missing_col(table_name: str, new_db_col_name: str, dtype: str = "TEXT", db_path=_DEFAULT_DB_PATH): 
+def create_missing_col(table_name: str, new_db_col_name: str, dtype: str = "TEXT", db_path=DATABASE_URL): 
     '''Add new column to a table in the RDBMS'''
-    conn = sqlite3.connect(db_path)
+    conn = psycopg2.connect(db_path)
     cursor = conn.cursor()
     query_create_col = f'''
         ALTER TABLE {table_name} ADD COLUMN {new_db_col_name} {dtype}
@@ -121,9 +124,8 @@ def fetch_missing_rows(conn, col_to_check: str, batch_size=20):
     '''This funciton fetches the rows where the a specified column is NULL'''
 
     cursor = conn.cursor()
-    cursor.execute("BEGIN IMMEDIATE")
     query = f'''
-    SELECT hash_id, link FROM ads_raw WHERE {col_to_check} IS NULL LIMIT ?
+    SELECT hash_id, link FROM ads_raw WHERE {col_to_check} IS NULL LIMIT %s
     '''
     cursor.execute(query, (batch_size,))
 
@@ -132,7 +134,7 @@ def fetch_missing_rows(conn, col_to_check: str, batch_size=20):
 
     return result_list
 
-def add_missing_col_information(conn: sqlite3.Connection, 
+def add_missing_col_information(conn, 
                                 db_col_to_update: str, 
                                 updates: dict, 
                                 values_to_update_with: str):
@@ -142,8 +144,8 @@ def add_missing_col_information(conn: sqlite3.Connection,
 
     query_update_col = f'''
         UPDATE ads_raw
-        SET {db_col_to_update} = ?
-        WHERE hash_id = ?    
+        SET {db_col_to_update} = %s
+        WHERE hash_id = %s    
     '''
 
     for update in updates:

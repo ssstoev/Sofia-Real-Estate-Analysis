@@ -7,7 +7,7 @@ export interface Listing {
     size_m2: string;
     neighbourhood: string;
     score: number;
-    imgUrl: string;
+    img_url: string;
     link: string
 }
 

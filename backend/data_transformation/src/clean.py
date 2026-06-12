@@ -1,54 +1,51 @@
 import pandas as pd
 import numpy as np
-import _sqlite3
-import re
 
-def clean_data(conn: _sqlite3.Connection):
-    '''
-    Clean the ads_raw table. 
-     - Convert fields to numeric
-     - Convert fields to bool
-     - Create search_text col which is a combinaiton of search_text title + description + extras + price + size + floor
-     '''
+
+def clean_data(conn):
+    """
+    Clean the ads_raw table.
+    - Convert fields to numeric
+    - Convert fields to bool
+    """
 
     print("Begin cleaning... \n")
-    # 1. Load into a pandas DF
-    # Fetch all processed data
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM ads_raw WHERE status = 'done'")
     columns = [description[0] for description in cursor.description]
     rows = cursor.fetchall()
 
-    # Convert to DataFrame
-    # conn.close()
-    df = pd.DataFrame(rows, columns=columns)
+    df = pd.DataFrame(rows, columns=columns).copy()
 
-    # 2. Convert to numeric fields
-    cols_to_strip = ["price_m2_eur", "price_m2_bgn"]
-    df = df.copy()
-    df[cols_to_strip] = df[cols_to_strip].apply(lambda row: row.str.replace(" ", ""))
-    df[cols_to_strip] = df[cols_to_strip].astype(float)
+    for col in ["price_m2_eur", "price_m2_bgn", "total_price_eur"]:
+        if col in df:
+            df[col] = (
+                df[col]
+                .astype("string")
+                .str.replace(" ", "", regex=False)
+                .str.replace(",", "", regex=False)
+            )
+            df[col] = pd.to_numeric(df[col], errors="coerce")
 
-    # convert the size_m2 col separately as there aren't whitespaces to strip there
-    df["size_m2"] = pd.to_numeric(df["size_m2"])
+    if "size_m2" in df:
+        df["size_m2"] = pd.to_numeric(df["size_m2"], errors="coerce")
 
-    # 3. Convert cols to bool
-    bool_cols = ["akt16", "broker_commision"]
-    for col in bool_cols:
-        df[f"{col}"] = df[f"{col}"].apply(convert_to_bool)
-        # drop the old columns
-        # df.drop(labels=col, axis=1, inplace=True)
+    for col in ["akt16", "broker_commision"]:
+        if col in df:
+            df[col] = df[col].apply(convert_to_bool)
 
     print("Finished cleaning! \n")
     return df
 
-# Helper function to convert yes/no columns to bool
+
 def convert_to_bool(value: str):
     if pd.isna(value):
         return np.nan
-    
-    elif value.upper() == "ДА":
-        return True
 
-    else:
+    normalized = str(value).strip().casefold()
+    if normalized == "да":
+        return True
+    if normalized == "не":
         return False
+
+    return np.nan

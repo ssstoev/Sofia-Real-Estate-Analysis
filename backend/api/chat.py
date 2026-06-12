@@ -1,7 +1,9 @@
+'''Chat Endpoint'''
 from agent.main import agent
 from pydantic import BaseModel
 from fastapi import APIRouter
 
+# define an api router
 router = APIRouter()
 
 class ChatRequest(BaseModel):

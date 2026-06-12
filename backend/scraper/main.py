@@ -1,15 +1,17 @@
-from scraper.src.worker import backfill_imgurl_column, backfill_new_column, run_worker
-from scraper.src.database import create_missing_col, init_db
+from scraper.src.worker import run_worker
+from scraper.src.database import init_db
 from scraper.src.harvester import run_harvester
 
 def main():
-    # init_db()
-    # run_harvester()
-    # run_worker()
-    # backfill_new_column()
-    # create_missing_col("ads_raw", "imgUrl")
-    # print("Created new col")
-    backfill_imgurl_column()   
+    print(f"{30*'='}DATABASE CREATION BEGIN{30*'='}")
+    init_db()
+    print(f"{30*'='}DATABASE CREATION SUCCESSFULL{30*'='}\n")
+    print(f"{30*'='}BEGIN HARVESTER...{30*'='}")
+    run_harvester()
+    print(f"{30*'='}HARVESTER FINISHED{30*'='}\n")
+    print(f"{30*'='}BEGIN WORKER...{30*'='}")
+    run_worker()
+    print(f"{30*'='}WORKER FINISHED{30*'='}\n")
     return None
 
 if __name__ == "__main__":

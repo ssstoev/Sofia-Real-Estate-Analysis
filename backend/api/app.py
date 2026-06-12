@@ -1,3 +1,4 @@
+'''Orchestrate the API endpoints from this file'''
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 

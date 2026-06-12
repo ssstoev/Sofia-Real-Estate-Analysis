@@ -1,6 +1,6 @@
-import os
 import re
-import sqlite3
+
+from data_transformation.src.database import get_connection
 
 PROPERTY_TYPE_ROOMS = {
     'гарсониера': 1,
@@ -53,8 +53,7 @@ def extract_hard_constraints(query: str) -> dict:
 def filter_db_on_hard_constraints(constraints_dict: dict) -> list:
     '''Receives a constraints dictionary and returns all hash_ids which fall in the criteria'''
 
-    _DB_PATH = os.path.join(os.path.dirname(__file__), "..", "scraper", "data", "ads_storage.db")
-    conn = sqlite3.connect(_DB_PATH)
+    conn = get_connection()
     base_query  = "SELECT hash_id FROM ads_cleaned"
     cursor = conn.cursor()
     # build a dynamic query
@@ -66,14 +65,14 @@ def filter_db_on_hard_constraints(constraints_dict: dict) -> list:
 
     for field in exact_fields:
         if constraints_dict.get(field) is not None:
-            where_clauses.append(f"{field} = :{field}")
+            where_clauses.append(f"{field} = %({field})s")
             params[field] = constraints_dict[field]
 
     # Upper bound fields — user wants at most this value
     lte_fields = ["total_price_eur", "size_m2", "price_m2_eur"]
     for field in lte_fields:
         if constraints_dict.get(field) is not None:
-            where_clauses.append(f"{field} <= :{field}")
+            where_clauses.append(f"{field} <= %({field})s")
             params[field] = constraints_dict[field]
 
     if not where_clauses:
@@ -83,6 +82,7 @@ def filter_db_on_hard_constraints(constraints_dict: dict) -> list:
     full_query = f"{base_query} WHERE {' AND '.join(where_clauses)}"
     print(full_query)
 
-    results = cursor.execute(full_query, params)
-    print(results)
+    cursor.execute(full_query, params)
+    results = cursor.fetchall()
+    conn.close()
     return [row[0] for row in results]
