@@ -9,7 +9,7 @@ BACKEND_DIR = Path(__file__).resolve().parents[3]
 load_dotenv(BACKEND_DIR / ".env")
 DATABASE_URL = os.getenv("DATABASE_URL")
 
-EXCLUDE_TERMS = ["Земеделски имот", "Сграда", "Склад", "Промишлен имот"]
+EXCLUDE_TERMS = ["Земеделски имот", "Сграда", "Склад", "Промишлен имот", "Офис", "Парцел", "Гараж", "Паркомясто", "Магазин", "Къща"]
 
 
 def get_connection():
@@ -22,8 +22,9 @@ def get_connection():
 def init_ads_appartments_db(conn):
     cursor = conn.cursor()
     cursor.execute("SET search_path TO public")
+    cursor.execute("DROP TABLE IF EXISTS public.ads_appartments")
     cursor.execute("""
-        CREATE TABLE IF NOT EXISTS public.ads_appartments (
+        CREATE TABLE public.ads_appartments (
             hash_id VARCHAR(64) PRIMARY KEY,
             title VARCHAR(500),
             img_url VARCHAR(1000),
@@ -37,15 +38,19 @@ def init_ads_appartments_db(conn):
             nr_of_rooms SMALLINT,
             description TEXT,
             floor SMALLINT,
+            building_total_floors SMALLINT,
+            is_first_floor BOOL,
+            is_last_floor BOOL,
             akt16 BOOL,
             energy_class VARCHAR(255),
             potreblenie VARCHAR(255),
             broker_commision BOOL,
             additional_notes VARCHAR(1000),
+            is_furnished BOOL,
+            near_public_transport BOOL,
             extras VARCHAR(500)
         )
     """)
-    cursor.execute("TRUNCATE TABLE public.ads_appartments")
     conn.commit()
     print("Prepared ads_appartments table!")
 

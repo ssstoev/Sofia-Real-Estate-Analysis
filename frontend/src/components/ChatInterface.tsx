@@ -3,6 +3,10 @@ import { Send, Sparkles, Building2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import ListingCard from "./ListingCard";
 import { Listing, sendChatMessage } from "@/api/api";
+import ReactMarkdown from "react-markdown";
+import remarkMath from "remark-math";
+import rehypeKatex from "rehype-katex";
+import "katex/dist/katex.min.css";
 
 interface Message {
   id: string;
@@ -26,7 +30,8 @@ const sampleListing: Listing = {
     neighbourhood: "string",
     score: 0.2,
     img_url: "https://www.imoti.net/web/files/obiavi/6217591/main_image/thumb_880x0_wm_4-1.jpg?ver=1776588194",
-    link: "https://www.imoti.net/bg/obiava/prodava/sofia/ovcha-kupel/tristaen/6217591/?sid=it0yuZ&page=1"
+    link: "https://www.imoti.net/bg/obiava/prodava/sofia/ovcha-kupel/tristaen/6217591/?sid=it0yuZ&page=1",
+    nr_of_rooms: 4
 }
 
 const ChatInterface = () => {
@@ -54,6 +59,9 @@ const ChatInterface = () => {
 
     setMessages((prev) => [...prev, userMessage]);
     setInput("");
+    if (inputRef.current) {
+      inputRef.current.style.height = "auto";
+    }
     setIsLoading(true);
 
     // Call the chat API
@@ -79,6 +87,13 @@ const ChatInterface = () => {
     }
   };
 
+  const autoResize = () => {
+    const el = inputRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
@@ -94,7 +109,7 @@ const ChatInterface = () => {
           <Building2 className="h-5 w-5 text-primary-foreground" />
         </div>
         <div>
-          <h1 className="text-lg font-semibold text-foreground">ImotQuery</h1>
+          <h1 className="text-lg font-semibold text-foreground">Domify</h1>
           <p className="text-xs text-muted-foreground">
             AI-powered real estate search
           </p>
@@ -142,15 +157,14 @@ const ChatInterface = () => {
                     : ""
                 }`}
               >
-                <p className={`text-sm leading-relaxed ${message.role === "assistant" ? "text-foreground" : ""}`}>
-                  {message.content.split("**").map((part, i) =>
-                    i % 2 === 1 ? (
-                      <strong key={i}>{part}</strong>
-                    ) : (
-                      <span key={i}>{part}</span>
-                    )
-                  )}
-                </p>
+                <div className={`text-sm leading-relaxed prose prose-sm max-w-none dark:prose-invert ${message.role === "assistant" ? "text-foreground" : ""}`}>
+                  <ReactMarkdown
+                    remarkPlugins={[remarkMath]}
+                    rehypePlugins={[rehypeKatex]}
+                  >
+                    {message.content}
+                  </ReactMarkdown>
+                </div>
                 {message.listings && (
                   <div className="max-h-[60vh] overflow-y-auto space-y-2 pr-1">
                     {message.listings.map((listing) => (
@@ -184,11 +198,12 @@ const ChatInterface = () => {
             <textarea
               ref={inputRef}
               value={input}
-              onChange={(e) => setInput(e.target.value)}
+              onChange={(e) => { setInput(e.target.value); autoResize(); }}
               onKeyDown={handleKeyDown}
               placeholder="Ask about real estate listings..."
               rows={1}
-              className="w-full resize-none bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
+              style={{ maxHeight: "10rem" }}
+              className="w-full resize-none overflow-y-auto bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
             />
           </div>
           <Button

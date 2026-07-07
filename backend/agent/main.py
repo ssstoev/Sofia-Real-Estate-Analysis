@@ -2,36 +2,45 @@
 
 import os
 from dotenv import load_dotenv
+
 load_dotenv(os.path.join(os.path.dirname(__file__), '..', '.env'))
 
 from agent.tools.analytics import get_stats
 from agent.tools.search import search_listings
-from agent.tools.schemas import analytics_tool, search_tool
+from agent.tools.find_deals import find_deals
+from agent.tools.schemas import analytics_tool, search_tool, find_deals_tool
 from openai import AsyncOpenAI
 import json
 
+# the actual functionlity of the tools
 tool_registry = {
     "get_stats": get_stats,
     "search_listings": search_listings,
+    "find_deals": find_deals
 }
 
-tools = [analytics_tool, search_tool]
+# put the schematics of the tools
+tools = [analytics_tool, search_tool, find_deals_tool]
 client = AsyncOpenAI()
 
 async def agent(user_message: str, history: list[dict]) -> tuple[str, list]:
+    
+    # keep last 10 messages as history
     messages = history[-10:] + [{"role": "user", "content": user_message}]
     listings = []
 
     while True:
         response = await client.chat.completions.create(
             model="gpt-4o",
-            tools=tools,        # same tool schema as before, no changes needed
+            tools=tools,       
             messages=[  
                 {
                 "role": "system", 
                 "content": "You are a real estate assistant for Sofia, Bulgaria. "
                     "Use the get_stats tool to answer market statistics questions. "
-                    "Use the search_listings tool when the user wants to find or browse specific listings. "
+                    "Use the search_listings tool when the user wants to find or browse listings by location, size, or price — but NOT for deal-hunting. "
+                    "Use the find_deals tool when the user asks for deals, undervalued/underpriced apartments, investment opportunities, good ROI, or rental yield. "
+                    "When unsure between search_listings and find_deals, prefer find_deals if the query contains any value-judgement (cheap, good deal, worth it, investment)."
                     "Always present prices in EUR. "
                     "The default estate type are appartments"
                     "When you call search_listings, respond with only 1 short sentence summarising what you found (e.g. neighbourhood, count). Do not list or describe individual properties. "
@@ -53,19 +62,22 @@ async def agent(user_message: str, history: list[dict]) -> tuple[str, list]:
             for tool_call in choice.message.tool_calls:
                 tool_name = tool_call.function.name
                 tool_input = json.loads(tool_call.function.arguments)
-                print(f"[TOOL SELECTED] {tool_name}")        # which tool did it pick?
+                print(f"[TOOL SELECTED] {tool_name}")        # dsiplay which tool it picked & the input to the tool
                 print(f"[TOOL INPUT] {tool_input}") 
 
                 tool_result = await tool_registry[tool_name](**tool_input)
-                print(f"[TOOL RESULT] {tool_result}")
+                print(f"[TOOL RESULT] {len(tool_result)}")
 
-                if tool_name == "search_listings" and isinstance(tool_result, list):
+                if tool_name in ("search_listings", "find_deals") and isinstance(tool_result, list):
                     listings = tool_result
+                    tool_summary = f"Found {len(tool_result)} listings."
+                else:
+                    tool_summary = str(tool_result)
 
                 messages.append({
                     "role": "tool",
                     "tool_call_id": tool_call.id,
-                    "content": str(tool_result)
+                    "content": tool_summary
                 })
 
         # LLM is done

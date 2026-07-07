@@ -8,7 +8,8 @@ export interface Listing {
     neighbourhood: string;
     score: number;
     img_url: string;
-    link: string
+    link: string;
+    nr_of_rooms: number
 }
 
 export interface SearchResponse {
@@ -21,20 +22,8 @@ export interface ChatResponse {
     listings: Listing[];
 }
 
-export async function searchListings(query: string, topK: number = 10): Promise<SearchResponse> {
-    console.log("Calling API...")
-    const response = await fetch(`${API_BASE}/search`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query, top_k: topK })
-    });
-
-    if (!response.ok) throw new Error("Search failed");
-
-    return response.json();
-}
-
 export async function sendChatMessage(message: string, sessionId: string): Promise<ChatResponse> {
+    console.log("Calling API...")
     const response = await fetch(`${API_BASE}/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -43,5 +32,7 @@ export async function sendChatMessage(message: string, sessionId: string): Promi
 
     if (!response.ok) throw new Error("Chat request failed");
 
-    return response.json();
+    const data = await response.json();
+    console.log("Chat API response:", data);
+    return data;
 }

@@ -5,7 +5,7 @@ analytics_tool = {
     "function": {
         "name": "get_stats",
         "description": """Get market statistics for real estate listings.
-            Use this when the user asks about average price, median price, 
+            Use this when the user asks about average price, median price, price ranges,
             price per sqm, or number of listings — either overall or for a specific neighborhood. 
             Also be ready to compare prices between neighbourhoods.""",
         "parameters": {
@@ -35,7 +35,8 @@ search_tool = {
         "name": "search_listings",
         "description": """Search for real estate listings matching the user's criteria.
             Use this when the user wants to find, browse, or get specific listings — e.g. '2-bedroom apartment in Lozenets under 150k'.
-            Returns the top matching listings with price, size, neighbourhood, and a link.""",
+            Returns the top matching listings with price, size, neighbourhood, and a link.
+            Do NOT use this for queries about deals, undervalued properties, investment opportunities, or rental yield — use find_deals for those.""",
         "parameters": {
             "type": "object",
             "properties": {
@@ -50,6 +51,27 @@ search_tool = {
                 }
             },
             "required": ["query"]
+        }
+    }
+}
+
+find_deals_tool = {
+    "type": "function",
+    "function": {
+        "name": "find_deals",
+        "description": """Find underpriced apartments relative to the market average for their neighbourhood and room count.
+            Use this when the user asks for: deals, undervalued/underpriced properties, investment opportunities, good ROI, rental yield, or anything implying price-vs-market comparison.
+            Trigger phrases: 'undervalued', 'below market', 'good deal', 'cheap for the area', 'investment', 'yield', 'ROI', 'worth buying'.
+            Do NOT use this for a plain listing search — use search_listings for that.
+            Returns listings sorted by how far below the neighbourhood average they are.""",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "user_query": {
+                    "type": "string",
+                    "description": "The user's search query"
+                }
+            },  "required": ["user_query"]
         }
     }
 }

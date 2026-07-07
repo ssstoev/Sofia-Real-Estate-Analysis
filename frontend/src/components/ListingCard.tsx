@@ -1,5 +1,5 @@
 import { Listing } from "@/api/api";
-import { MapPin, BedDouble, Bath, Ruler, ExternalLink } from "lucide-react";
+import { MapPin, BedDouble, Ruler, ExternalLink, CircleDollarSign } from "lucide-react";
 
 interface ListingCardProps {
   listing: Listing;
@@ -45,23 +45,20 @@ const ListingCard = ({ listing }: ListingCardProps) => {
           </div>
         </div>
 
-        <div className="flex items-end justify-between">
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center gap-1 text-sm font-semibold text-primary">
+            <CircleDollarSign className="h-4 w-4" />
+            <span>{listing.total_price_eur.toLocaleString()} EUR</span>
+          </div>
           <div className="flex items-center gap-3 text-xs text-muted-foreground">
             <span className="flex items-center gap-1">
-              <BedDouble className="h-3.5 w-3.5" /> 
-              {/* {listing.bedrooms} */}
-            </span>
-            <span className="flex items-center gap-1">
-              <Bath className="h-3.5 w-3.5" /> 
-              {/* {listing.bathrooms} */}
+              <BedDouble className="h-3.5 w-3.5" />
+              {listing.nr_of_rooms}
             </span>
             <span className="flex items-center gap-1">
               <Ruler className="h-3.5 w-3.5" /> {listing.size_m2}m²
             </span>
           </div>
-          <span className="text-base font-bold text-primary">
-            {/* {formattedPrice} */}
-          </span>
         </div>
 
         {/* {listing.tags && listing.tags.length > 0 && (

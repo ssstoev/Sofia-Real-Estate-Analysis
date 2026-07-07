@@ -2,17 +2,17 @@ import sys
 from pathlib import Path
 
 
-BACKEND_DIR = Path(__file__).resolve().parents[1]
+BACKEND_DIR = Path(__file__).resolve().parents[3]
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
-from backend.data_transformation.ads_cleaned.src.clean import clean_data
-from backend.data_transformation.ads_cleaned.src.database import (
+from data_transformation.ads_cleaned.src.clean import clean_data
+from data_transformation.ads_cleaned.src.database import (
     get_connection,
     init_ads_cleaned_db,
     load_data_into_ads_cleaned,
 )
-from backend.data_transformation.ads_cleaned.src.transform import transform_data
+from data_transformation.ads_cleaned.src.transform import transform_data
 
 
 def main():

@@ -24,8 +24,9 @@ def get_connection():
 def init_ads_cleaned_db(conn):
     cursor = conn.cursor()
     cursor.execute("SET search_path TO public")
+    cursor.execute("DROP TABLE IF EXISTS public.ads_cleaned")
     cursor.execute("""
-        CREATE TABLE IF NOT EXISTS public.ads_cleaned (
+        CREATE TABLE public.ads_cleaned (
             hash_id VARCHAR(64) PRIMARY KEY,
             title VARCHAR(500),
             img_url VARCHAR(1000),
@@ -39,15 +40,19 @@ def init_ads_cleaned_db(conn):
             nr_of_rooms SMALLINT,
             description TEXT,
             floor SMALLINT,
+            building_total_floors SMALLINT,
+            is_first_floor BOOL,
+            is_last_floor BOOL,
             akt16 BOOL,
             energy_class VARCHAR(255),
             potreblenie VARCHAR(255),
             broker_commision BOOL,
             additional_notes VARCHAR(1000),
+            is_furnished BOOL,
+            near_public_transport BOOL,
             extras VARCHAR(500)
         )
     """)
-    cursor.execute("TRUNCATE TABLE public.ads_cleaned")
     conn.commit()
     print("Prepared ads_cleaned table!")
 
@@ -69,11 +74,16 @@ def load_data_into_ads_cleaned(cleaned_dict, conn):
             clean_value(item.get("nr_of_rooms")),
             clean_value(item.get("description")),
             clean_value(item.get("floor")),
+            clean_value(item.get("building_total_floors")),
+            clean_value(item.get("is_first_floor")),
+            clean_value(item.get("is_last_floor")),
             clean_value(item.get("akt16")),
             clean_value(item.get("energy_class")),
             clean_value(item.get("potreblenie")),
             clean_value(item.get("broker_commision")),
             clean_value(item.get("additional_notes")),
+            clean_value(item.get("is_furnished")),
+            clean_value(item.get("near_public_transport")),
             clean_value(item.get("extras")),
         )
         for item in cleaned_dict
@@ -98,11 +108,16 @@ def load_data_into_ads_cleaned(cleaned_dict, conn):
             nr_of_rooms,
             description,
             floor,
+            building_total_floors,
+            is_first_floor,
+            is_last_floor,
             akt16,
             energy_class,
             potreblenie,
             broker_commision,
             additional_notes,
+            is_furnished,
+            near_public_transport,
             extras
         ) VALUES %s
     """
@@ -130,7 +145,7 @@ def fetch_metadata_from_rdbms(candidate_ids: list):
     cursor = conn.cursor()
     cursor.execute(
         """
-        SELECT hash_id, link, img_url
+        SELECT hash_id, link, img_url, title, total_price_eur, size_m2, neighbourhood, nr_of_rooms
         FROM ads_cleaned
         WHERE hash_id = ANY(%s)
         """,
@@ -143,6 +158,11 @@ def fetch_metadata_from_rdbms(candidate_ids: list):
         row[0]: {
             "link": row[1],
             "img_url": row[2],
+            "title": row[3],
+            "total_price_eur": row[4],
+            "size_m2": row[5],
+            "neighbourhood": row[6],
+            "nr_of_rooms": row[7],
         }
         for row in rows
     }
